@@ -30,10 +30,10 @@ build/
 *~
 .DS_Store
 
-# Documentation
-*.md
+# Documentation (keep in repo but exclude from Docker builds)
 docs/
-LICENSE
+!README.md
+!DEPLOYMENT.md
 
 # Docker
 Dockerfile
