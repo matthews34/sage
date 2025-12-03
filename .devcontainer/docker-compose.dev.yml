@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  sage:
+    # Override the default command to keep container running for development
+    command: sleep infinity
+
+    # Add development environment variables
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+
+    # Install development dependencies
+    volumes:
+      - ../:/app:cached
+      - sage-venv:/app/.venv
+      # Prevent overwriting node_modules and other cache directories
+      - /app/__pycache__
+      - /app/.pytest_cache
+
+    # Enable debugger access
+    ports:
+      - "8000:8000"
+      - "5678:5678"  # debugpy port
+
+    # Run as root for development convenience
+    user: root
+
+volumes:
+  sage-venv:

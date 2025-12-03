@@ -1,0 +1,135 @@
+version: '3.8'
+
+services:
+  # Main SAGE application
+  sage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    container_name: sage-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sage:sage@postgres:5432/sage
+      - OLLAMA_HOST=http://ollama:11434
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8001
+      # CPU-only mode for ARM
+      - CUDA_VISIBLE_DEVICES=""
+      - OMP_NUM_THREADS=4
+    volumes:
+      - ./sage:/app/sage
+      - ./models:/app/models
+      - ./data:/app/data
+    depends_on:
+      - postgres
+      - ollama
+      - chromadb
+    networks:
+      - sage-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+
+  # Ollama LLM runtime (CPU-only for Raspberry Pi)
+  ollama:
+    image: ollama/ollama:latest
+    platform: linux/arm64
+    container_name: sage-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      # CPU-only configuration for Raspberry Pi
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+    networks:
+      - sage-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.5'
+          memory: 3G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/arm64
+    container_name: sage-postgres
+    environment:
+      - POSTGRES_USER=sage
+      - POSTGRES_PASSWORD=sage
+      - POSTGRES_DB=sage
+      # Optimize for limited RAM on Raspberry Pi
+      - POSTGRES_SHARED_BUFFERS=128MB
+      - POSTGRES_MAX_CONNECTIONS=50
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - sage-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sage"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB vector database
+  chromadb:
+    image: chromadb/chroma:latest
+    platform: linux/arm64
+    container_name: sage-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+      # Limit threads for Raspberry Pi
+      - CHROMA_SERVER_THREAD_POOL_SIZE=4
+    networks:
+      - sage-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+volumes:
+  ollama-data:
+    driver: local
+  postgres-data:
+    driver: local
+  chroma-data:
+    driver: local
+
+networks:
+  sage-network:
+    driver: bridge
