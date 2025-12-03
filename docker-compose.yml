@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Main SAGE application
+  sage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sage-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sage:sage@postgres:5432/sage
+      - OLLAMA_HOST=http://ollama:11434
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8001
+    volumes:
+      - ./sage:/app/sage
+      - ./models:/app/models
+      - ./data:/app/data
+    depends_on:
+      - postgres
+      - ollama
+      - chromadb
+    networks:
+      - sage-network
+    restart: unless-stopped
+
+  # Ollama LLM runtime
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sage-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - sage-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Remove GPU deployment if not available
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: sage-postgres
+    environment:
+      - POSTGRES_USER=sage
+      - POSTGRES_PASSWORD=sage
+      - POSTGRES_DB=sage
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - sage-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sage"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB vector database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: sage-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - sage-network
+    restart: unless-stopped
+
+volumes:
+  ollama-data:
+    driver: local
+  postgres-data:
+    driver: local
+  chroma-data:
+    driver: local
+
+networks:
+  sage-network:
+    driver: bridge

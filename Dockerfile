@@ -10,25 +10,42 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+# Install system dependencies for AI/ML stack
+# - ffmpeg: Required for faster-whisper audio processing
+# - libsndfile1: Audio file handling
+# - build-essential: Compiling Python packages
+# - git: Version control and package installation
+# - curl: Downloading models and resources
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
+    ffmpeg \
+    libsndfile1 \
+    libsndfile1-dev \
+    portaudio19-dev \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file if it exists
-COPY requirements.tx[t] ./
+# Copy requirements file
+COPY requirements.txt ./
 
 # Install Python dependencies
-RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
-# Expose port (default 8000, can be customized)
+# Create directories for models and data
+RUN mkdir -p /app/models /app/data
+
+# Expose port for FastAPI
 EXPOSE 8000
 
-# Default command (can be overridden)
-CMD ["python", "-m", "sage"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command - run FastAPI with uvicorn
+CMD ["uvicorn", "sage.main:app", "--host", "0.0.0.0", "--port", "8000"]
