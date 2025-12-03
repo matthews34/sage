@@ -22,8 +22,9 @@ htmlcov/
 dist/
 build/
 
-# IDEs
+# IDEs & Development
 .vscode/
+.devcontainer/
 .idea/
 *.swp
 *.swo
